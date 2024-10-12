@@ -1,18 +1,36 @@
 const Event = require('../models/Event');
+const User = require('../models/User');  // Adjust the path to the actual location of your User model
+
 
 // Create a new event
 exports.createEvent = async (req, res) => {
     try {
-        // Get the event data from the request body
-        const { title, description, date, location, slots } = req.body;
+        const { title, description, date, location, slots, firstName, lastName, email, gNumber } = req.body;
 
-        // Create a new Event instance with the provided data
+        // Check if the user already exists based on their gNumber or email
+        let creator = await User.findOne({ gNumber });
+
+        // If the user doesn't exist, create a new user
+        if (!creator) {
+            creator = new User({
+                firstName,
+                lastName,
+                email: email.toLowerCase(),  // Ensure the email is in lowercase
+                gNumber
+            });
+
+            // Save the new user to the database
+            await creator.save();
+        }
+
+        // Create a new event with the user's ID as the creator
         const newEvent = new Event({
             title,
             description,
             date,
             location,
-            createdBy: req.user ? req.user.id : null,  // Assuming authenticated user, otherwise null
+            creator: creator._id,  // Assign the newly created or found user as the creator
+            usersJoined: [],        // Initialize the usersJoined list as empty
             slots
         });
 
@@ -20,16 +38,17 @@ exports.createEvent = async (req, res) => {
         const savedEvent = await newEvent.save();
 
         // Add this event to the user's createdEvents list
-        user.createdEvents.push(savedEvent._id);
-        await user.save();
+        creator.createdEvents.push(savedEvent._id);
+        await creator.save();  // Save the updated user with the event they created
 
-        // Send a success response with the saved event
+        // Return the newly created event
         res.status(201).json(savedEvent);
+
     } catch (error) {
-        // Handle errors and send an error response
-        res.status(500).json({ message: 'Server error', error });
+        console.error('Error creating event:', error);  // Log the error to inspect what went wrong
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
-}
+};
 
 // Get all events
 exports.getAllEvents = async (req, res) => {
@@ -209,22 +228,111 @@ exports.getPastEvents = async (req, res) => {
     }
 }
 
+
 exports.joinEvent = async (req, res) => {
     try {
+        const { firstName, lastName, email, gNumber } = req.body;
         const event = await Event.findById(req.params.id);
+
+        // Check if the event exists
         if (!event) {
             return res.status(404).json({ message: 'Event not found' });
         }
 
+        // Check if the event has available slots
         if (event.slots <= 0) {
             return res.status(400).json({ message: 'No slots available for this event' });
         }
 
+        // Find the user by both gNumber and email (unique combination)
+        let user = await User.findOne({ gNumber, email: email.toLowerCase() });
+
+        // If the user doesn't exist, create a new user
+        if (!user) {
+            user = new User({
+                firstName,
+                lastName,
+                email: email.toLowerCase(),
+                gNumber
+            });
+
+            // Save the new user to the database
+            await user.save();
+        }
+
+        // Check if the user has already joined the event
+        const hasUserJoined = event.usersJoined.some(joinedUser => joinedUser.equals(user._id));
+
+        if (hasUserJoined) {
+            return res.status(400).json({ message: 'User has already joined this event' });
+        }
+
+        // Add the user to the list of users who joined the event
+        event.usersJoined.push(user._id);
+
+        // Decrement available slots
         event.slots -= 1;
+
+        // Save the updated event
         await event.save();
 
+        // Add the event to the user's eventsJoined list
+        user.eventsJoined.push(event._id);
+        await user.save();  // Save the updated user
+
+        // Respond with success
         res.status(200).json({ message: 'Successfully joined the event', event });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error });
+        console.error('Error joining event:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }
+
+exports.leaveEvent = async (req, res) => {
+    try {
+        const { email, gNumber } = req.body;
+        const event = await Event.findById(req.params.id);
+
+        // Check if the event exists
+        if (!event) {
+            return res.status(404).json({ message: 'Event not found' });
+        }
+
+        // Find the user by gNumber and email
+        const user = await User.findOne({ gNumber, email: email.toLowerCase() });
+
+        // Check if the user exists
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check if the user has already joined the event
+        const hasUserJoined = event.usersJoined.some(joinedUser => joinedUser.equals(user._id));
+
+        if (!hasUserJoined) {
+            return res.status(400).json({ message: 'User has not joined this event' });
+        }
+
+        // Remove the user from the event's usersJoined array
+        event.usersJoined = event.usersJoined.filter(joinedUser => !joinedUser.equals(user._id));
+
+        // Increment available slots
+        event.slots += 1;
+
+        // Save the updated event
+        await event.save();
+
+        // Remove the event from the user's eventsJoined list
+        user.eventsJoined = user.eventsJoined.filter(joinedEvent => !joinedEvent.equals(event._id));
+
+        // Save the updated user
+        await user.save();
+
+        // Respond with success
+        res.status(200).json({ message: 'Successfully left the event', event });
+    } catch (error) {
+        console.error('Error leaving event:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+}
+

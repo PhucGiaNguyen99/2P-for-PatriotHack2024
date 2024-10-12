@@ -17,6 +17,9 @@ app.use(express.json());
 // Use the event routes
 app.use('/api/events', require('./routes/eventRoutes'));
 
+// Use the user routes
+app.use('/api/users', require('./routes/userRoutes'));
+
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

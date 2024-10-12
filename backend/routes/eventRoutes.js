@@ -41,4 +41,7 @@ router.get('/past', eventController.getPastEvents);
 // Router to allow user to join an event
 router.post('/join/:id', eventController.joinEvent);
 
+// Router to allow user to leave an event
+router.post('/leave/:id', eventController.leaveEvent);
+
 module.exports = router;
