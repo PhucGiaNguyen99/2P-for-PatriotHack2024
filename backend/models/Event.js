@@ -21,11 +21,15 @@ const eventSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    createdBy: {
+    creator: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
+    usersJoined: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     slots: {
         type: Number,
         required: true,

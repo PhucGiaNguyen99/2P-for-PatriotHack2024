@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
             message: props => `${props.value} is not a valid gNumber! It must be 8 digits long.`
         }
     },
+    createdEvents: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Event'
+    }],
     eventsJoined: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Event'
@@ -39,7 +43,6 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
-
 });
 
 // Export the User model
